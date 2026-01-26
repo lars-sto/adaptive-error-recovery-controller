@@ -2,9 +2,11 @@ package recovery
 
 import (
 	"context"
+	"math"
 	"time"
 )
 
+// Engine calculates FEC policies based on network stats
 type Engine struct {
 	cfg  Config
 	src  StatsSource
@@ -18,9 +20,6 @@ type Engine struct {
 
 func NewEngine(cfg Config, src StatsSource, sink PolicySink) *Engine {
 	// init defaults
-	if cfg.NACKDisableRTTMs == 0 || cfg.NACKEnableRTTMs == 0 {
-		cfg = DefaultConfig()
-	}
 	return &Engine{
 		cfg:         cfg,
 		src:         src,
@@ -52,55 +51,66 @@ func (e *Engine) Run(ctx context.Context) {
 	}
 }
 
-// Evaluate updates internal state based on the provided stats sample,
-// and returns the resulting policy decision plus whether anything changed.
 func (e *Engine) Evaluate(s NetworkStats) (PolicyDecision, bool) {
 	changed := false
-	reasonN := ""
 	reasonF := ""
 
-	// FEC policy (loss hysteresis + simple overhead mapping)
-	if !e.fecEnabled && s.LossRate >= e.cfg.FECEnableLossRate {
-		e.fecEnabled = true
-		changed = true
-		reasonF = "enable FEC: loss high"
-	} else if e.fecEnabled && s.LossRate <= e.cfg.FECDisableLossRate {
-		e.fecEnabled = false
-		if e.fecScheme != FECSchemeNone {
-			e.fecScheme = FECSchemeNone
+	// 1. Basic protection factor inspired by libwebrtc tables
+	targetOverhead := GetLossProtFactor(s.RTTMs, s.LossRate)
+
+	// 2. BWE-Veto (Congestion Control Awareness)
+	if s.TargetBitrate > 0 && s.CurrentBitrate > 0 {
+		projectedTotal := s.CurrentBitrate * (1.0 + targetOverhead)
+		if projectedTotal > s.TargetBitrate {
+			// Reduce overhead to prevent congestion
+			maxAllowedOverhead := (s.TargetBitrate / s.CurrentBitrate) - 1.0
+			if maxAllowedOverhead < 0 {
+				maxAllowedOverhead = 0
+			}
+
+			if targetOverhead > maxAllowedOverhead {
+				targetOverhead = maxAllowedOverhead
+				reasonF = "BWE cap: reduced FEC to fit bandwidth"
+			}
 		}
-		if e.fecOverhead != 0.0 {
-			e.fecOverhead = 0.0
-		}
-		changed = true
-		reasonF = "disable FEC: loss low"
 	}
 
-	// If enabled, pick scheme + overhead (placeholder policy).
+	// 3. State-Update & Hysteresis
+	newEnabledState := targetOverhead > 0.01
+
+	if newEnabledState != e.fecEnabled {
+		e.fecEnabled = newEnabledState
+		changed = true
+		if e.fecEnabled {
+			reasonF = "FEC enabled: network protection required"
+		} else {
+			reasonF = "FEC disabled: stable network"
+		}
+	}
+
+	// 4. Scheme & Overhead Update
 	if e.fecEnabled {
-		// v1: default to FlexFEC03; only mark changed if it differs.
 		if e.fecScheme != FECSchemeFlexFEC03 {
 			e.fecScheme = FECSchemeFlexFEC03
 			changed = true
-			if reasonF == "" {
-				reasonF = "select FEC scheme"
-			}
 		}
 
-		// Map loss to overhead in [MinOverhead, MaxOverhead]
-		target := clamp(e.cfg.MinOverhead+(s.LossRate*2.0), e.cfg.MinOverhead, e.cfg.MaxOverhead)
-		if target != e.fecOverhead {
-			e.fecOverhead = target
+		// Small threshold so we don't send new policy on every small change
+		if math.Abs(e.fecOverhead-targetOverhead) > 0.02 {
+			e.fecOverhead = targetOverhead
 			changed = true
 			if reasonF == "" {
-				reasonF = "adjust FEC overhead"
+				reasonF = "adjusted protection factor"
 			}
+		}
+	} else {
+		if e.fecOverhead != 0 {
+			e.fecOverhead = 0
+			changed = true
 		}
 	}
 
-	// If nothing changed, we can still return the current decision (useful in tests),
-	// but Run() will only publish on changes.
-	return e.buildDecision(joinReasons(reasonN, reasonF), eventTime(s)), changed
+	return e.buildDecision(reasonF, eventTime(s)), changed
 }
 
 func (e *Engine) buildDecision(reason string, at time.Time) PolicyDecision {

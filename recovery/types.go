@@ -4,10 +4,12 @@ import "time"
 
 // NetworkStats input stats (from Stats Interceptor or any adapter)
 type NetworkStats struct {
-	RTTMs     int       // round-trip time in milliseconds
-	LossRate  float64   // 0.0..1.0 (e.g., 0.02 = 2%)
-	JitterMs  int       // jitter in milliseconds
-	Timestamp time.Time // when these stats were observed
+	RTTMs          int     // round-trip time in milliseconds
+	LossRate       float64 // 0.0..1.0 (e.g., 0.02 = 2%)
+	JitterMs       int     // jitter in milliseconds
+	TargetBitrate  float64
+	CurrentBitrate float64
+	Timestamp      time.Time // when these stats were observed
 }
 
 // StatsSource provides a stream of stats. Adapter layer can wrap Pion stats interceptor

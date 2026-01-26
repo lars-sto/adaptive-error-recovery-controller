@@ -2,10 +2,6 @@ package recovery
 
 // Config provides the policy engine config
 type Config struct {
-	// NACK hysteresis thresholds (ms)
-	NACKDisableRTTMs int
-	NACKEnableRTTMs  int
-
 	// FEC thresholds (simple v1 heuristic)
 	FECEnableLossRate  float64 // enable FEC if loss >= this
 	FECDisableLossRate float64 // disable FEC if loss <= this
@@ -17,9 +13,6 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		NACKDisableRTTMs: 160,
-		NACKEnableRTTMs:  120,
-
 		FECEnableLossRate:  0.03, // 3%
 		FECDisableLossRate: 0.01, // 1%
 
