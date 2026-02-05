@@ -10,8 +10,9 @@ type Config struct {
 	FECDisableLossRate float64 // disable if loss <= this
 
 	// FEC overhead bounds
-	MinOverhead float64
-	MaxOverhead float64
+	MinOverhead      float64
+	MaxOverhead      float64
+	OverheadDeadband float64
 }
 
 func DefaultConfig() Config {
@@ -23,5 +24,7 @@ func DefaultConfig() Config {
 
 		MinOverhead: 0.00,
 		MaxOverhead: 0.25,
+
+		OverheadDeadband: 0.02,
 	}
 }
