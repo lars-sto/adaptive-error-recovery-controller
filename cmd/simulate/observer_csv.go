@@ -52,8 +52,8 @@ func (o *CSVObserver) Close() error {
 	return o.f.Close()
 }
 
-func (o *CSVObserver) OnSample(s recovery.NetworkStats, d recovery.PolicyDecision, changed bool) error {
-	return o.w.Write([]string{
+func (o *CSVObserver) OnSample(s recovery.NetworkStats, d recovery.PolicyDecision, changed bool) {
+	_ = o.w.Write([]string{
 		strconv.FormatInt(s.Timestamp.UnixMilli(), 10),
 		fmtFloat(s.LossRate),
 		strconv.Itoa(s.RTTMs),

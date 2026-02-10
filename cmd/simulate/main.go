@@ -1,26 +1,31 @@
 package main
 
 import (
-	"flag"
+	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/lars-sto/adaptive-error-recovery-controller/recovery"
 )
 
-func main() {
-	scenario := flag.String("scenario", "loss_increasing", "scenario name (loss_increasing|loss_threshold|bwe_bottleneck)")
-	out := flag.String("out", "", "output csv path (default based on scenario)")
-	flag.Parse()
+type nopSink struct{}
 
-	outPath := *out
-	if outPath == "" {
-		outPath = fmt.Sprintf("simdata/%s.csv", *scenario)
-	}
+func (nopSink) Publish(recovery.PolicyDecision) {}
+
+// Choose scenario here (single source of truth).
+const (
+	scenarioName = "03_bwe_bottleneck"
+	// scenarioName = "01_loss_increase"
+	// scenarioName = "02_loss_threshold"
+)
+
+func main() {
+	start := time.Now()
+
+	series := pickScenario(scenarioName, start)
+	outPath := fmt.Sprintf("simdata/%s.csv", scenarioName)
 
 	cfg := recovery.DefaultConfig()
-	controller := recovery.NewFlexFEC03Controller(cfg)
 
 	obs, err := NewCSVObserver(outPath)
 	if err != nil {
@@ -28,25 +33,27 @@ func main() {
 	}
 	defer func() { _ = obs.Close() }()
 
-	start := time.Now()
-
-	var series []recovery.NetworkStats
-	switch *scenario {
-	case "loss_increasing":
-		series = scenario01IncreasingLoss(start)
-	case "loss_threshold":
-		series = scenario02LossAroundEnable(start)
-	case "bwe_bottleneck":
-		series = scenario03BWEBottleneck(start)
-	default:
-		fmt.Fprintf(os.Stderr, "unknown scenario: %s\n", *scenario)
-		os.Exit(2)
-	}
-
+	statsCh := make(chan recovery.NetworkStats, len(series))
 	for _, s := range series {
-		dec, changed := controller.Decide(s)
-		if err := obs.OnSample(s, dec, changed); err != nil {
-			panic(err)
-		}
+		statsCh <- s
+	}
+	close(statsCh)
+
+	src := recovery.NewChanSource(statsCh)
+
+	eng := recovery.NewEngine(cfg, src, nopSink{}, obs)
+	eng.Run(context.Background())
+}
+
+func pickScenario(name string, start time.Time) []recovery.NetworkStats {
+	switch name {
+	case "01_loss_increase":
+		return scenario01IncreasingLoss(start)
+	case "02_loss_threshold":
+		return scenario02LossAroundEnable(start)
+	case "03_bwe_bottleneck":
+		return scenario03BWEBottleneck(start)
+	default:
+		panic("unknown scenario: " + name)
 	}
 }
