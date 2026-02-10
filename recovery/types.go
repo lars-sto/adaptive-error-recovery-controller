@@ -51,3 +51,7 @@ type PolicyDecision struct {
 type PolicySink interface {
 	Publish(decision PolicyDecision)
 }
+
+type DecisionObserver interface {
+	OnSample(stats NetworkStats, decision PolicyDecision, changed bool)
+}

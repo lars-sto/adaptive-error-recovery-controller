@@ -10,11 +10,13 @@ type Engine struct {
 	src  StatsSource
 	sink PolicySink
 
+	obs DecisionObserver
+
 	// internal state (kept minimal for v1)
 	ctrl FECController
 }
 
-func NewEngine(cfg Config, src StatsSource, sink PolicySink) *Engine {
+func NewEngine(cfg Config, src StatsSource, sink PolicySink, obs DecisionObserver) *Engine {
 	var ctrl FECController
 
 	// Scheme dispatch happens once at construction time.
@@ -30,6 +32,7 @@ func NewEngine(cfg Config, src StatsSource, sink PolicySink) *Engine {
 		cfg:  cfg,
 		src:  src,
 		sink: sink,
+		obs:  obs,
 		ctrl: ctrl,
 	}
 }
@@ -48,6 +51,11 @@ func (e *Engine) Run(ctx context.Context) {
 				return
 			}
 			decision, changed := e.ctrl.Decide(s)
+
+			if e.obs != nil {
+				e.obs.OnSample(s, decision, changed)
+			}
+			
 			if changed {
 				e.sink.Publish(decision)
 			}
