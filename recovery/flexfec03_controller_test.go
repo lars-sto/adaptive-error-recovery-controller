@@ -121,7 +121,6 @@ func TestFlexFEC03Controller_BWECapLimitsOverhead(t *testing.T) {
 
 	c := NewFlexFEC03Controller(cfg)
 
-	// Choose a tight target bitrate so overhead must be capped by BWE.
 	cur := 1000.0
 	target := 1050.0 // allows ~5% overhead
 	s := mkStats(200, 0.20, cur, target)
@@ -140,26 +139,21 @@ func TestFlexFEC03Controller_DeadbandAvoidsTinyOverheadUpdates(t *testing.T) {
 
 	c := NewFlexFEC03Controller(cfg)
 
-	// We force overhead to be governed by BWE cap so the test is independent of table details,
-	// assuming the table suggests >= cap in these conditions (high loss/RTT).
 	cur := 1000.0
 
-	// Step 1: enable + set overhead ~0.10 via BWE cap
 	s1 := mkStats(200, 0.20, cur, 1100.0) // cap=0.10
 	dec1, changed1 := c.Decide(s1)
 	if !changed1 || !dec1.FEC.Enabled {
 		t.Fatalf("precondition: expected enabled + changed on first decision")
 	}
 
-	// Step 2: slightly different cap (0.11), delta=0.01 < deadband 0.02 => should NOT change
 	s2 := mkStats(200, 0.20, cur, 1110.0) // cap=0.11
 	dec2, changed2 := c.Decide(s2)
 	if changed2 {
 		t.Fatalf("expected changed=false for small overhead delta within deadband")
 	}
-	_ = dec2 // decision should remain stable; we don't assert exact overhead value
+	_ = dec2
 
-	// Step 3: larger cap jump to 0.25, delta >= 0.14 => should change (overhead update)
 	s3 := mkStats(200, 0.20, cur, 1250.0) // cap=0.25
 	_, changed3 := c.Decide(s3)
 	if !changed3 {
@@ -181,5 +175,66 @@ func TestFlexFEC03Controller_TimestampPropagates(t *testing.T) {
 	})
 	if !dec.FEC.At.Equal(ts) {
 		t.Fatalf("expected At to equal stats timestamp")
+	}
+}
+
+func TestFlexFEC03Controller_DisablesWhenBWECapForcesZeroOverhead(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Scheme = FECSchemeFlexFEC03
+
+	c := NewFlexFEC03Controller(cfg)
+
+	_, _ = c.Decide(mkStats(200, 0.20, 1000, 2000))
+
+	dec, changed := c.Decide(mkStats(200, 0.20, 1000, 900))
+
+	if !changed {
+		t.Fatalf("expected changed=true when BWE cap forces disable")
+	}
+	if dec.FEC.Enabled {
+		t.Fatalf("expected FEC disabled due to zero overhead budget")
+	}
+	if dec.FEC.TargetOverhead != 0 {
+		t.Fatalf("expected overhead=0 after disable")
+	}
+}
+
+func TestFlexFEC03Controller_NoChangeForIdenticalStats(t *testing.T) {
+	// Idempotence
+	cfg := DefaultConfig()
+	cfg.Scheme = FECSchemeFlexFEC03
+
+	c := NewFlexFEC03Controller(cfg)
+
+	s := mkStats(200, 0.20, 1000, 2000)
+
+	_, changed1 := c.Decide(s)
+	if !changed1 {
+		t.Fatalf("expected first decision to change state")
+	}
+
+	_, changed2 := c.Decide(s)
+	if changed2 {
+		t.Fatalf("expected no change for identical stats input")
+	}
+}
+
+func TestFlexFEC03Controller_DoesNotEnableIfMaxOverheadIsZero(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Scheme = FECSchemeFlexFEC03
+	cfg.MaxOverhead = 0.0 // FEC effectively disabled via config
+
+	c := NewFlexFEC03Controller(cfg)
+
+	dec, changed := c.Decide(mkStats(200, 0.20, 0, 0)) // high loss
+
+	if changed {
+		t.Fatalf("expected no state change when max overhead is zero")
+	}
+	if dec.FEC.Enabled {
+		t.Fatalf("expected FEC to remain disabled when max overhead is zero")
+	}
+	if dec.FEC.TargetOverhead != 0 {
+		t.Fatalf("expected overhead=0")
 	}
 }
