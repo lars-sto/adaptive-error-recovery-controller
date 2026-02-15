@@ -36,4 +36,4 @@ go.work.sum
 .venv
 
 
-simdata/
+../adaptive-fec-simulation/simdata/

@@ -4,12 +4,8 @@ import (
 	"math"
 )
 
-const (
-	OverheadDeadband = 0.02
-)
-
-// FlexFEC03Controller implements the v1 policy logic for FlexFEC-03.
-// It keeps minimal internal state for hysteresis and deadband updates.
+// FlexFEC03Controller implements the v1 policy logic for FlexFEC-03
+// It keeps minimal internal state for hysteresis and deadband updates
 type FlexFEC03Controller struct {
 	cfg Config
 
@@ -38,7 +34,7 @@ func (c *FlexFEC03Controller) Decide(s NetworkStats) (PolicyDecision, bool) {
 	targetOverhead = clamp(targetOverhead, c.cfg.MinOverhead, c.cfg.MaxOverhead)
 
 	// 3) Bandwidth-awareness (BWE veto):
-	// If FEC would exceed the target bitrate, cap overhead to fit the budget.
+	// If FEC would exceed the target bitrate, cap overhead to fit the budget
 	if s.TargetBitrate > 0 && s.CurrentBitrate > 0 {
 		projectedTotal := s.CurrentBitrate * (1.0 + targetOverhead)
 		if projectedTotal > s.TargetBitrate {
@@ -55,7 +51,7 @@ func (c *FlexFEC03Controller) Decide(s NetworkStats) (PolicyDecision, bool) {
 		}
 	}
 
-	// 4) Enable/disable hysteresis based on loss thresholds.
+	// 4) Enable/disable hysteresis based on loss thresholds
 	newEnabled := c.enabled
 	if !c.enabled {
 		// lossRate >= c.cfg.FECEnableLossRate && targetOverhead > 0
@@ -79,7 +75,7 @@ func (c *FlexFEC03Controller) Decide(s NetworkStats) (PolicyDecision, bool) {
 		}
 	}
 
-	// 5) Overhead update with deadband (avoid updates on tiny fluctuations).
+	// 5) Overhead update with deadband (avoid updates on tiny fluctuations)
 	if c.enabled {
 		if math.Abs(c.overhead-targetOverhead) > c.cfg.OverheadDeadband {
 			c.overhead = targetOverhead
@@ -87,11 +83,33 @@ func (c *FlexFEC03Controller) Decide(s NetworkStats) (PolicyDecision, bool) {
 			reason = joinReasons(reason, "adjusted protection factor")
 		}
 	} else {
-		// When disabled, ensure overhead is zero.
+		// When disabled, ensure overhead is zero
 		if c.overhead != 0 {
 			c.overhead = 0
 			changed = true
 		}
+	}
+
+	// 6) derive (k,r) for actuator
+	k := c.cfg.NumMediaPackets
+	var r uint32
+	if c.enabled && k > 0 {
+		rf := math.Round(float64(k) * c.overhead)
+		if rf < 0 {
+			rf = 0
+		}
+		if rf > float64(k) {
+			rf = float64(k)
+		}
+		r = uint32(rf)
+	}
+
+	// if r==0 then effective disable
+	if c.enabled && r == 0 {
+		// keep enabled=false semantics stable for actuator
+		c.enabled = false
+		changed = true
+		reason = joinReasons(reason, "FEC disabled: no overhead budget")
 	}
 
 	return PolicyDecision{
@@ -99,8 +117,15 @@ func (c *FlexFEC03Controller) Decide(s NetworkStats) (PolicyDecision, bool) {
 			Enabled:        c.enabled,
 			Scheme:         c.scheme,
 			TargetOverhead: c.overhead,
-			Reason:         reason,
-			At:             eventTime(s),
+
+			NumMediaPackets:  k,
+			NumFECPackets:    r,
+			CoverageMode:     c.cfg.CoverageMode,
+			InterleaveStride: c.cfg.InterleaveStride,
+			BurstSpan:        c.cfg.BurstSpan,
+
+			Reason: reason,
+			At:     eventTime(s),
 		},
 	}, changed
 }

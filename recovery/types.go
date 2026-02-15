@@ -31,13 +31,27 @@ const (
 	FECSchemeFlexFEC03 FECScheme = "flexfec03"
 )
 
+type CoverageMode string
+
+const (
+	CoverageModeInterleaved CoverageMode = "interleaved"
+	// reserved for later:
+	CoverageModeContiguous CoverageMode = "contiguous"
+)
+
 type FECPolicy struct {
 	Enabled bool
 	Scheme  FECScheme
 
-	// Common, scheme-agnostic knob: how much redundancy we aim to add.
-	// Interpretation: fraction of overhead (0.0..1.0). Example: 0.20 => ~20% overhead budget.
 	TargetOverhead float64
+
+	// Apply-ready actuator knobs (what interceptor needs)
+	NumMediaPackets uint32 // k (static)
+	NumFECPackets   uint32 // r (dynamic)
+	CoverageMode    CoverageMode
+
+	InterleaveStride uint32
+	BurstSpan        uint32
 
 	Reason string
 	At     time.Time
