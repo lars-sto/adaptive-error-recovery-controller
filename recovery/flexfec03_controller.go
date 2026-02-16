@@ -108,6 +108,9 @@ func (c *FlexFEC03Controller) Decide(s NetworkStats) (PolicyDecision, bool) {
 	if c.enabled && r == 0 {
 		// keep enabled=false semantics stable for actuator
 		c.enabled = false
+		if c.overhead != 0 {
+			c.overhead = 0
+		}
 		changed = true
 		reason = joinReasons(reason, "FEC disabled: no overhead budget")
 	}
