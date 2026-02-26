@@ -29,6 +29,8 @@ func (c *FlexFEC03Controller) Decide(s NetworkStats) (PolicyDecision, bool) {
 
 	// 1) Compute baseline protection overhead from RTT + loss (interpolated table)
 	targetOverhead := GetLossProtFactor(s.RTTMs, s.LossRate)
+	protectionFactorScale := 1.00 // scaling this does not yield better prot factor. Just more overhead
+	targetOverhead = targetOverhead * protectionFactorScale
 
 	// 2) Clamp to feasible bounds from config
 	targetOverhead = clamp(targetOverhead, c.cfg.MinOverhead, c.cfg.MaxOverhead)
