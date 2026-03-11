@@ -4,38 +4,40 @@ import (
 	"math"
 )
 
-// FlexFEC03Controller implements the v1 policy logic for FlexFEC-03
-// It keeps minimal internal state for hysteresis and deadband updates
-type FlexFEC03Controller struct {
-	cfg Config
+type FlexFECController struct {
+	cfg   FlexFECConfig
+	model FlexFECModel
 
 	enabled  bool
-	scheme   FECScheme
+	scheme   MechanismKind
 	overhead float64
 }
 
-func NewFlexFEC03Controller(cfg Config) *FlexFEC03Controller {
-	return &FlexFEC03Controller{
+func NewFlexFECController(cfg FlexFECConfig, model FlexFECModel) *FlexFECController {
+	if model == nil {
+		model = NewTableBasedFlexFECModel()
+	}
+
+	return &FlexFECController{
 		cfg:      cfg,
+		model:    model,
 		enabled:  false,
-		scheme:   FECSchemeFlexFEC03, // invariant for this controller
+		scheme:   MechanismFlexFEC03,
 		overhead: 0.0,
 	}
 }
 
-func (c *FlexFEC03Controller) Decide(s NetworkStats) (PolicyDecision, bool) {
+func (c *FlexFECController) Decide(s NetworkStats) (PolicyDecision, bool) {
 	changed := false
-	reason := ""
 
-	// 1) Compute baseline protection overhead from RTT + loss (interpolated table)
-	targetOverhead := GetLossProtFactor(s.RTTMs, s.LossRate)
-	protectionFactorScale := 1.00 // scaling this does not yield better prot factor. Just more overhead
-	targetOverhead = targetOverhead * protectionFactorScale
+	rec := c.model.Recommend(s)
+	targetOverhead := rec.TargetOverhead
+	reason := rec.Reason
 
-	// 2) Clamp to feasible bounds from config
+	// 1) Clamp to feasible bounds from config
 	targetOverhead = clamp(targetOverhead, c.cfg.MinOverhead, c.cfg.MaxOverhead)
 
-	// 3) Bandwidth-awareness (BWE veto):
+	// 2) Bandwidth-awareness (BWE veto):
 	// If FEC would exceed the target bitrate, cap overhead to fit the budget
 	if s.TargetBitrate > 0 && s.CurrentBitrate > 0 {
 		projectedTotal := s.CurrentBitrate * (1.0 + targetOverhead)
@@ -53,7 +55,7 @@ func (c *FlexFEC03Controller) Decide(s NetworkStats) (PolicyDecision, bool) {
 		}
 	}
 
-	// 4) Enable/disable hysteresis based on loss thresholds
+	// 3) Enable/disable hysteresis based on loss thresholds
 	newEnabled := c.enabled
 	if !c.enabled {
 		// lossRate >= c.cfg.FECEnableLossRate && targetOverhead > 0
@@ -77,7 +79,7 @@ func (c *FlexFEC03Controller) Decide(s NetworkStats) (PolicyDecision, bool) {
 		}
 	}
 
-	// 5) Overhead update with deadband (avoid updates on tiny fluctuations)
+	// 4) Overhead update with deadband (avoid updates on tiny fluctuations)
 	if c.enabled {
 		if math.Abs(c.overhead-targetOverhead) > c.cfg.OverheadDeadband {
 			c.overhead = targetOverhead
@@ -92,7 +94,7 @@ func (c *FlexFEC03Controller) Decide(s NetworkStats) (PolicyDecision, bool) {
 		}
 	}
 
-	// 6) derive (k,r) for actuator
+	// 5) derive (k,r) for actuator
 	k := c.cfg.NumMediaPackets
 	var r uint32
 	if c.enabled && k > 0 {
@@ -117,32 +119,26 @@ func (c *FlexFEC03Controller) Decide(s NetworkStats) (PolicyDecision, bool) {
 		reason = joinReasons(reason, "FEC disabled: no overhead budget")
 	}
 
-	return PolicyDecision{
-		FEC: FECPolicy{
-			Enabled:        c.enabled,
-			Scheme:         c.scheme,
-			TargetOverhead: c.overhead,
+	return NewFlexFECDecision(FlexFECPolicy{
+		Enabled:        c.enabled,
+		Mechanism:      c.scheme,
+		TargetOverhead: c.overhead,
 
-			NumMediaPackets:  k,
-			NumFECPackets:    r,
-			CoverageMode:     c.cfg.CoverageMode,
-			InterleaveStride: c.cfg.InterleaveStride,
-			BurstSpan:        c.cfg.BurstSpan,
+		NumMediaPackets:  k,
+		NumFECPackets:    r,
+		CoverageMode:     c.cfg.CoverageMode,
+		InterleaveStride: c.cfg.InterleaveStride,
+		BurstSpan:        c.cfg.BurstSpan,
 
-			Reason: reason,
-			At:     eventTime(s),
-		},
-	}, changed
+		Reason: reason,
+		At:     eventTime(s),
+	}), changed
 }
 
-// shouldEnable decides if we should transition from "disabled" to "enabled".
-// We only enable if loss is high enough AND we have a positive overhead budget.
-func (c *FlexFEC03Controller) shouldEnable(lossRate, targetOverhead float64) bool {
-	return lossRate >= c.cfg.FECEnableLossRate && targetOverhead > 0
+func (c *FlexFECController) shouldEnable(lossRate, targetOverhead float64) bool {
+	return lossRate >= c.cfg.EnableLossRate && targetOverhead > 0
 }
 
-// shouldDisable decides if we should transition from "enabled" to "disabled".
-// We disable if loss is low enough OR we have no overhead budget (e.g., BWE cap reduced it to zero).
-func (c *FlexFEC03Controller) shouldDisable(lossRate, targetOverhead float64) bool {
-	return lossRate <= c.cfg.FECDisableLossRate || targetOverhead <= 0
+func (c *FlexFECController) shouldDisable(lossRate, targetOverhead float64) bool {
+	return lossRate <= c.cfg.DisableLossRate || targetOverhead <= 0
 }

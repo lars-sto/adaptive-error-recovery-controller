@@ -69,13 +69,13 @@ func (c *seqController) Decide(_ NetworkStats) (PolicyDecision, bool) {
 	return d, ch
 }
 
-func newTestEngine(src StatsSource, sink PolicySink, obs DecisionObserver, ctrl FECController) *Engine {
-	return &Engine{
-		cfg:  DefaultConfig(),
-		src:  src,
-		sink: sink,
-		obs:  obs,
-		ctrl: ctrl,
+func newTestRecoveryEngine(src StatsSource, sink PolicySink, obs DecisionObserver, ctrl MechanismController) *RecoveryEngine {
+	return &RecoveryEngine{
+		cfg:         DefaultConfig(),
+		src:         src,
+		sink:        sink,
+		obs:         obs,
+		controllers: []MechanismController{ctrl},
 	}
 }
 
@@ -90,16 +90,31 @@ func TestEngine_PublishOnlyOnChange_ObserverAlwaysCalled(t *testing.T) {
 	sink := &countingSink{}
 	obs := &recordingObserver{}
 
-	dec1 := PolicyDecision{FEC: FECPolicy{Enabled: true, Scheme: FECSchemeFlexFEC03, NumMediaPackets: 10, NumFECPackets: 1}}
-	dec2 := PolicyDecision{FEC: FECPolicy{Enabled: true, Scheme: FECSchemeFlexFEC03, NumMediaPackets: 10, NumFECPackets: 1}}
-	dec3 := PolicyDecision{FEC: FECPolicy{Enabled: true, Scheme: FECSchemeFlexFEC03, NumMediaPackets: 10, NumFECPackets: 2}}
+	dec1 := NewFlexFECDecision(FlexFECPolicy{
+		Enabled:         true,
+		Mechanism:       MechanismFlexFEC03,
+		NumMediaPackets: 10,
+		NumFECPackets:   1,
+	})
+	dec2 := NewFlexFECDecision(FlexFECPolicy{
+		Enabled:         true,
+		Mechanism:       MechanismFlexFEC03,
+		NumMediaPackets: 10,
+		NumFECPackets:   1,
+	})
+	dec3 := NewFlexFECDecision(FlexFECPolicy{
+		Enabled:         true,
+		Mechanism:       MechanismFlexFEC03,
+		NumMediaPackets: 10,
+		NumFECPackets:   2,
+	})
 
 	ctrl := &seqController{
 		decisions: []PolicyDecision{dec1, dec2, dec3},
 		changes:   []bool{true, false, true},
 	}
 
-	e := newTestEngine(src, sink, obs, ctrl)
+	e := newTestRecoveryEngine(src, sink, obs, ctrl)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -127,11 +142,12 @@ func TestEngine_StopsOnContextDone(t *testing.T) {
 	sink := &countingSink{}
 	obs := &recordingObserver{}
 	ctrl := &seqController{
-		decisions: []PolicyDecision{{FEC: FECPolicy{Enabled: false, Scheme: FECSchemeNone}}},
-		changes:   []bool{false},
+		decisions: []PolicyDecision{{
+			Mechanism: MechanismNone, Policy: FlexFECPolicy{Enabled: false, Mechanism: MechanismNone}}},
+		changes: []bool{false},
 	}
 
-	e := newTestEngine(src, sink, obs, ctrl)
+	e := newTestRecoveryEngine(src, sink, obs, ctrl)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -161,11 +177,11 @@ func TestEngine_StopsOnClosedStatsChannel(t *testing.T) {
 	sink := &countingSink{}
 	obs := &recordingObserver{}
 	ctrl := &seqController{
-		decisions: []PolicyDecision{{FEC: FECPolicy{Enabled: true, Scheme: FECSchemeFlexFEC03}}},
+		decisions: []PolicyDecision{{Mechanism: MechanismFlexFEC03, Policy: FlexFECPolicy{Enabled: true, Mechanism: MechanismFlexFEC03}}},
 		changes:   []bool{true},
 	}
 
-	e := newTestEngine(src, sink, obs, ctrl)
+	e := newTestRecoveryEngine(src, sink, obs, ctrl)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

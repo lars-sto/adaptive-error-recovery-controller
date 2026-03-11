@@ -24,11 +24,11 @@ type NACKPolicy struct {
 	At      time.Time
 }
 
-type FECScheme string
+type MechanismKind string
 
 const (
-	FECSchemeNone      FECScheme = "none"
-	FECSchemeFlexFEC03 FECScheme = "flexfec03"
+	MechanismNone      MechanismKind = "none"
+	MechanismFlexFEC03 MechanismKind = "flexfec03"
 )
 
 type CoverageMode string
@@ -39,9 +39,9 @@ const (
 	CoverageModeContiguous CoverageMode = "contiguous"
 )
 
-type FECPolicy struct {
-	Enabled bool
-	Scheme  FECScheme
+type FlexFECPolicy struct {
+	Enabled   bool
+	Mechanism MechanismKind
 
 	TargetOverhead float64
 
@@ -58,14 +58,17 @@ type FECPolicy struct {
 }
 
 type PolicyDecision struct {
-	FEC FECPolicy
+	Mechanism MechanismKind
+	Policy    any
 }
 
-// PolicySink receives policy decisions. Adapter layer can forward to policy pipes.
+// PolicySink receives policy decisions. Adapter layer can forward to policy pipes
 type PolicySink interface {
 	Publish(decision PolicyDecision)
 }
 
+// DecisionObserver OnSample may be called multiple times for a single stats sample
+// when multiple mechanism controllers are registered
 type DecisionObserver interface {
 	OnSample(stats NetworkStats, decision PolicyDecision, changed bool)
 }
