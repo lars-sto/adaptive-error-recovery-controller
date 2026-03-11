@@ -13,8 +13,9 @@ func AsFlexFECPolicy(d PolicyDecision) (FlexFECPolicy, bool) {
 	return p, true
 }
 
-func NewFlexFECDecision(p FlexFECPolicy) PolicyDecision {
+func NewFlexFECDecision(stream StreamKey, p FlexFECPolicy) PolicyDecision {
 	return PolicyDecision{
+		Stream:    stream,
 		Mechanism: MechanismFlexFEC03,
 		Policy:    p,
 	}

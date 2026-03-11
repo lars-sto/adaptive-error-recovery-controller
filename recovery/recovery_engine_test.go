@@ -90,19 +90,19 @@ func TestEngine_PublishOnlyOnChange_ObserverAlwaysCalled(t *testing.T) {
 	sink := &countingSink{}
 	obs := &recordingObserver{}
 
-	dec1 := NewFlexFECDecision(FlexFECPolicy{
+	dec1 := NewFlexFECDecision(StreamKey{MediaSSRC: 1000}, FlexFECPolicy{
 		Enabled:         true,
 		Mechanism:       MechanismFlexFEC03,
 		NumMediaPackets: 10,
 		NumFECPackets:   1,
 	})
-	dec2 := NewFlexFECDecision(FlexFECPolicy{
+	dec2 := NewFlexFECDecision(StreamKey{MediaSSRC: 1000}, FlexFECPolicy{
 		Enabled:         true,
 		Mechanism:       MechanismFlexFEC03,
 		NumMediaPackets: 10,
 		NumFECPackets:   1,
 	})
-	dec3 := NewFlexFECDecision(FlexFECPolicy{
+	dec3 := NewFlexFECDecision(StreamKey{MediaSSRC: 1000}, FlexFECPolicy{
 		Enabled:         true,
 		Mechanism:       MechanismFlexFEC03,
 		NumMediaPackets: 10,

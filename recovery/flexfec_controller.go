@@ -119,7 +119,7 @@ func (c *FlexFECController) Decide(s NetworkStats) (PolicyDecision, bool) {
 		reason = joinReasons(reason, "FEC disabled: no overhead budget")
 	}
 
-	return NewFlexFECDecision(FlexFECPolicy{
+	return NewFlexFECDecision(s.Stream, FlexFECPolicy{
 		Enabled:        c.enabled,
 		Mechanism:      c.scheme,
 		TargetOverhead: c.overhead,

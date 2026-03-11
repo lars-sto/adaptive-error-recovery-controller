@@ -2,8 +2,14 @@ package recovery
 
 import "time"
 
+type StreamKey struct {
+	MediaSSRC uint32
+}
+
 // NetworkStats input stats (from Stats Interceptor or any adapter)
 type NetworkStats struct {
+	Stream StreamKey
+
 	RTTMs          int     // round-trip time in milliseconds
 	LossRate       float64 // 0.0..1.0 (e.g., 0.02 = 2%)
 	JitterMs       int     // jitter in milliseconds
@@ -58,6 +64,7 @@ type FlexFECPolicy struct {
 }
 
 type PolicyDecision struct {
+	Stream    StreamKey
 	Mechanism MechanismKind
 	Policy    any
 }
