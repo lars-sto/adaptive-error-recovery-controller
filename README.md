@@ -9,23 +9,23 @@ so that additional mechanisms and models can be integrated later.
 
 The current codebase implements the following layers:
 
-1. **Observation Layer**
+1. Observation Layer
     - Not yet implemented
     - wiring of runtime signal producers such as stats interceptors, transport feedback adapters, or GCC inputs
 
-2. **Coordination Layer**
+2. Coordination Layer
     - Not yet implemented
     - event-driven coordination and shared runtime state aggregation
     - planned for later integration work
     - Orchestrator Component that collects Input from BWE, Stats, ... and produces snapshots for Orchestrator
 
-3. **Orchestration Layer**
+3. Orchestration Layer
     - orchestrates runtime decision flow
     - consumes runtime stats
     - invokes mechanism-specific controllers
     - publishes policy decisions
 
-4. **Mechanism Layer**
+4. Mechanism Layer
     1. Model
        - defines mechanism specific decision logic
     2. Controller
