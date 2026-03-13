@@ -7,41 +7,33 @@ so that additional mechanisms and models can be integrated later.
 
 ## Current Architecture
 
-The current codebase implements the following layers:
+The prototype is organized into four layers:
 
 1. Observation Layer
-    - Not yet implemented
-    - wiring of runtime signal producers such as stats interceptors, transport feedback adapters, or GCC inputs
+    - planned input layer for runtime signals
+    - examples: stream statistics, feedback adapters, bandwidth estimation inputs
 
 2. Coordination Layer
-    - Not yet implemented
+    - planned shared-state and event-coordination layer
     - event-driven coordination and shared runtime state aggregation
-    - planned for later integration work
-    - Orchestrator Component that collects Input from BWE, Stats, ... and produces snapshots for Orchestrator
+    - intended to combine inputs from multiple signal sources into coherent runtime snapshots
 
 3. Orchestration Layer
-    - orchestrates runtime decision flow
-    - consumes runtime stats
+    - drives runtime decision flow
+    - consumes runtime observations
     - invokes mechanism-specific controllers
     - publishes policy decisions
 
 4. Mechanism Layer
-    1. Model
-       - defines mechanism specific decision logic
-    2. Controller
-       - transforms model into runtime policy
-       - does claming, hysteresis, stability logic, ...
-       - decides if and how policy updates should be propagated
-    3. Interceptors
-       - applies policies
-       - execution layer
-    - currently implemented: FlexFEC
-    - future extension points: NACK, RED, audio FEC, ...
+    - contains mechanism-specific adaptation logic
+    - currently implemented for FlexFEC
+    - split into:
+        - Model: decision logic
+        - Controller: policy shaping, hysteresis, stability logic, bounded updates
+        - Interceptor integration: applies policy decisions at runtime
 
-## Current Scope
+Status
 
-The current implementation is limited to:
-- one concrete mechanism implemented: FlexFEC-03
-- one recovery engine instance
-- supports multiple mechanism controllers per sample
+This repository is currently a prototype used to explore adaptive FlexFEC control and possible integration patterns for runtime coordination between interceptors and related components.
 
+Possible future extensions include NACK, RED, audio FEC, and additional signal sources.
