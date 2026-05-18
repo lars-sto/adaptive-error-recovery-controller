@@ -2,7 +2,6 @@ package recovery
 
 import "time"
 
-// eventTime uses the stats timestamp if available; otherwise falls back to wall clock.
 func eventTime(s NetworkStats) time.Time {
 	if !s.Timestamp.IsZero() {
 		return s.Timestamp

@@ -1,11 +1,5 @@
 package recovery
 
-//
-// Minimal helpers for local prototyping (optional):
-// - ChanSource: feed stats via channel
-// - ChanSink: observe decisions via channel
-//
-
 type ChanSource struct{ ch <-chan NetworkStats }
 
 func NewChanSource(ch <-chan NetworkStats) *ChanSource { return &ChanSource{ch: ch} }

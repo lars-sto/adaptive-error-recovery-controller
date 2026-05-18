@@ -6,17 +6,6 @@ import (
 	"time"
 )
 
-// Tests:
-//		Bandwidth awareness
-//			-
-//		Hysteresis
-//			- stays activated on small changes
-//			- stays deactivated on small changes
-//			- deactivates on small change if no bandwidth is available
-//		Deadband
-//			- stays activated if difference is smaller then config c.cfg.OverheadDeadband
-//			- stays deactivated if difference is smaller then config c.cfg.OverheadDeadband
-
 const eps = 1e-6
 
 func mkStats(rtt int, loss float64, cur, target float64) NetworkStats {
